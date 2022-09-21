@@ -165,7 +165,7 @@ void app_main() {
     flip_frame();
     while(gpio_get_level(0));
     //delay start
-    while(esp_timer_get_time() < last_frame_time+2000000);
+    while(esp_timer_get_time() < last_frame_time+500000);
     // create ships
 
     Piece ship;
@@ -251,18 +251,20 @@ void app_main() {
       }
 
       // //iterate over the linked list of enemies moving them, then drawing them
-      struct Node* temp = enemies.first;
-      while(temp->next != NULL) {
+      //test to ensure some actually exist before running.
+      if (enemies.first != NULL){
+        struct Node* temp = enemies.first;
+        while(temp->next != NULL) {
 
-        //move
-        temp->enemy.position = add_vec(temp->enemy.position, mul_vec_by_float(first_level_velocity,dt));
+          //move
+          temp->enemy.position = add_vec(temp->enemy.position, mul_vec_by_float(first_level_velocity,dt));
 
 
-        draw_enemy(temp->enemy);
-        temp = temp->next;
+          draw_enemy(temp->enemy);
+          temp = temp->next;
 
-       }
-
+        }
+      }
 
 
 
