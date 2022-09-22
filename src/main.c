@@ -94,8 +94,8 @@ static inline vec2f min_vector(vec2f v, vec2f max) {
   return (vec2f) v;
 }
 
-static inline vec2f random_start(int screen_width, vec2f dim) {
-  return (vec2f) {rand() % screen_width+1,0};
+vec2f random_start(int screen_width, vec2f dim) {
+  return (vec2f) {rand() % (int) screen_width+1-dim.x,0-dim.y};
 }
 
 void draw_ship(Piece ship) {
@@ -107,6 +107,13 @@ void draw_ship(Piece ship) {
 bool test_enemy(Piece enemy, float screen_height) {
     return (enemy.dimensions.y >= screen_height);  
   
+}
+//adapted from https://levelup.gitconnected.com/2d-collision-detection-8e50b6b8b5c0
+bool test_collision(Piece a, Piece b) {
+  return a.position.x < b.position.x + b.dimensions.x //if a's left most position is less than b's right most
+  && a.position.x + a.dimensions.x > b.position.x // while a's right most is greater than b's left most, they must be overlapping on x
+  && a.position.y < b.position.y + b.dimensions.y // if a's top most dimension in less than b's bottom most dimension
+  && a.position.y + a.dimensions.y > b.position.y;//  while a's bottom most dimension is greater than b's top most then they overlap
 }
 
 void draw_enemy(Piece enemy) {
@@ -131,11 +138,13 @@ void app_main() {
   //game variables
   u_int16_t level = 0;
   u_int32_t score = 0;
+  bool crashed;
 
   // game piece configurations, should be able to be modified in menu
+  // position is always the top left corner of the hit box! 
   vec2f ship_dimensions = (vec2f) {20,40};
-  vec2f min_ship_pos = (vec2f) {ship_dimensions.x/2, 0};
-  vec2f max_ship_pos = (vec2f) {135 - ship_dimensions.x/2, 240 - ship_dimensions.y};
+  vec2f min_ship_pos = (vec2f) {0, 0};
+  vec2f max_ship_pos = (vec2f) {135 - ship_dimensions.x, 240 - ship_dimensions.y};
   vec2f max_velocity = (vec2f) {100,0}; //pixels per second essentially
   float thrust_accel = 200; //pixels per second per second
   float drag_decel = 100;
@@ -158,7 +167,7 @@ void app_main() {
 
   // infinite loop through the game menus 
   for(;;){
-      
+    crashed = false;
     //draws menu screen and awaits user press of either key
     cls(rgbToColour(75,125,200));
     setFont(FONT_UBUNTU16);
@@ -169,9 +178,9 @@ void app_main() {
     // create ships
 
     Piece ship;
-    ship.position = (vec2f) {135/2+1, max_ship_pos.y};
     ship.velocity = (vec2f) {0,0};
     ship.dimensions = ship_dimensions;
+    ship.position = (vec2f) {135/2+1-ship.dimensions.x/2, max_ship_pos.y};
 
     struct enemies enemies;
     enemies.count = 0;
@@ -180,7 +189,7 @@ void app_main() {
     last_frame_time = esp_timer_get_time();
     srand(last_frame_time);
     // operating game loop continues endlessly until lose condition
-    for (;;) {
+    while(!crashed) {
 
       cls(0);
 
@@ -258,8 +267,9 @@ void app_main() {
 
           //move
           temp->enemy.position = add_vec(temp->enemy.position, mul_vec_by_float(first_level_velocity,dt));
-
-
+          
+          //this has to be set as a result, otherwise it just swaps between states as it scans through each item in the LL
+          if (test_collision(temp->enemy,ship)) crashed = true;
           draw_enemy(temp->enemy);
           temp = temp->next;
 
@@ -269,9 +279,9 @@ void app_main() {
 
 
 
-      //draw scoreboard (currently has FPS in it)
-      draw_rectangle(0,0,80,16,rgbToColour(30,30,100));
-      gprintf("X %.2f",ship.velocity.x);
+      //draw scoreboard
+      draw_rectangle(0,0,240,16,rgbToColour(30,30,100));
+      if (crashed) gprintf("Crash!!");
       last_frame_time = current_time;
       flip_frame();
 
@@ -281,12 +291,14 @@ void app_main() {
 
 
 
-
-
-
-
-
     //finish screen
+
+    cls(rgbToColour(255,0,0));
+    flip_frame();
+    while(esp_timer_get_time() < last_frame_time + 2000000);
+
+
+
 
 
 
