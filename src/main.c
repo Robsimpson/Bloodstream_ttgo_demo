@@ -11,7 +11,7 @@ typedef struct { float x; float y; } vec2f;
 //game pieces
 typedef struct Piece {
 
-  //Using 2d vector for ship allows me to reuse similar functions for projectiles
+  //Using 2d vector for pieces allows me to reuse a lot of code for projectiles
   //even though the main player piece will only move side to side
   //the position marks the 'nose' of the ship (top center)
   vec2f dimensions;
@@ -124,8 +124,8 @@ void app_main() {
   set_orientation(PORTRAIT);
   
   //game variables
-  u_int16_t level = 0;
-  u_int32_t score = 0;
+  u_int16_t level;
+  u_int32_t score;
   bool crashed;
 
   // game piece configurations, should be able to be modified in menu
@@ -134,18 +134,18 @@ void app_main() {
   vec2f min_ship_pos = (vec2f) {0, 0};
   vec2f max_ship_pos = (vec2f) {135 - ship_dimensions.x, 240 - ship_dimensions.y};
   vec2f max_velocity = (vec2f) {100,0}; //pixels per second essentially
+
   float thrust_accel = 200; //pixels per second per second
   float drag_decel = 100;
 
   vec2f enemy_dimesions = (vec2f) {6,20};
+  vec2f max_enemy_velocity = (vec2f) {5,10};
   int first_level_enemies = 5;
   int max_enemies = 20;
-  vec2f first_level_velocity = (vec2f) {0,10};
+  vec2f first_level_velocity = (vec2f) {0,5};
 
   // timer declarations
-  u_int64_t current_time, last_enemy_time ,last_frame_time = esp_timer_get_time();
-      last_enemy_time = last_frame_time;
-
+  u_int64_t current_time, last_level_time, last_enemy_time ,last_frame_time = esp_timer_get_time();
   float dt; //declare as float for the vector calcs.
 
 
@@ -155,13 +155,16 @@ void app_main() {
 
   // infinite loop through the game menus 
   for(;;){
+
     crashed = false;
+    level = 1;
+    score = 0;
     //draws menu screen and awaits user press of either key
     cls(rgbToColour(75,125,200));
     setFont(FONT_UBUNTU16);
     flip_frame();
     while(gpio_get_level(0));
-    //delay start
+    //delay start to allow for button release
     while(esp_timer_get_time() < last_frame_time+500000);
     // create ships
 
@@ -175,6 +178,9 @@ void app_main() {
     enemies.first = NULL;
    
     last_frame_time = esp_timer_get_time();
+    last_level_time = last_frame_time;
+    last_enemy_time = last_frame_time;
+
     srand(last_frame_time);
     // operating game loop continues endlessly until lose condition
     while(!crashed) {
@@ -223,8 +229,8 @@ void app_main() {
 
       draw_ship(ship);
 
-      //create enemies if enough time has passed
-      if (last_enemy_time+4000000 < current_time) {
+      //create enemies if enough time has passed, time between enemies gets tighter each time
+      if (last_enemy_time+(4000000-level*10000) < current_time) {
           //check there aren't too many on the board
           if (enemies.count < first_level_enemies + level && enemies.count <= max_enemies) {
             
@@ -252,10 +258,15 @@ void app_main() {
       if (enemies.first != NULL){
         struct Node* temp = enemies.first;
         while(temp != NULL) {
+          dt = (esp_timer_get_time() - last_frame_time)/1.0e6f; //recalculating to handle slight time changes making jerky movements
           //test if out of screen yet and if so delete from the ll
           //this occurs here so that temp can become the next in the list before all the moves etc
-          temp->piece.position = add_vec(temp->piece.position, mul_vec_by_float(first_level_velocity,dt));
-          
+          //level adds some acceleration
+          temp->piece.velocity = add_vec(temp->piece.velocity,mul_vec_by_float((vec2f){0,level*10},dt));
+          //up to a scaling max velocity
+          temp->piece.velocity = min_vector(temp->piece.velocity,add_vec(max_velocity,(vec2f){0,5*level}));
+          //then this is moved
+          temp->piece.position = add_vec(temp->piece.position, mul_vec_by_float(temp->piece.velocity,dt));
           //this has to be set as a result, otherwise it just swaps between states as it scans through each item in the LL
             if (test_collision(temp->piece,ship)) crashed = true;
             draw_enemy(temp->piece);
@@ -266,8 +277,7 @@ void app_main() {
         }
       }
 
-      //clean up the pieces
-      //this is done seperately
+      //clean up the pieces that have exited the board and increment score
       if (enemies.first != NULL) {
         struct Node* temp = enemies.first;
         struct Node* to_delete = NULL;
@@ -287,45 +297,39 @@ void app_main() {
 
       }
 
+      //increment level if required
+      if (last_level_time+30000000 < current_time ) {
 
-
+        level += 1;
+        last_level_time = current_time;
+        
+      }
 
       //draw scoreboard
       draw_rectangle(0,0,240,16,rgbToColour(30,30,100));
-      gprintf("Score: %d",score);
+      gprintf("Level: %d Score: %d",level,score);
       last_frame_time = current_time;
       flip_frame();
+
+      //display level change
+      if (last_level_time + 1000000 > current_time && level > 1) {
+        draw_rectangle(0,105,240,30,rgbToColour(255,0,0));
+        print_xy("LEVEL UP",CENTER,CENTER);
+      }
+
 
 
     }
 
-
-
-
-    //finish screen
+    //==========================
+    //Game Over Screen
+    //==========================
 
     cls(rgbToColour(255,0,0));
     flip_frame();
     while(esp_timer_get_time() < last_frame_time + 2000000);
 
 
-
-
-
-
-
-
-
-
-
-
   }
-
-
-
-
-
-
-
 
 }
