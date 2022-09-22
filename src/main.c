@@ -22,16 +22,16 @@ typedef struct Piece {
 } Piece;
 
   //creating a linked list to hold enemies
-struct Node {
-  Piece enemy;
+typedef struct Node {
+  Piece piece;
   struct Node* next;
-};
-struct enemies {
+} Node;
+typedef struct linked_list {
   struct Node* first;
   uint16_t count;
-};
+} linked_list;
 
-void add_node(struct Node* list, struct Node* new) {
+void add_node(struct Node *list, struct Node *new) {
 
   while(list->next != NULL) {
     list= list->next;
@@ -40,39 +40,27 @@ void add_node(struct Node* list, struct Node* new) {
 
 }
 
-void delete_node(struct Node* head, struct Node* delete) {
+void delete_node(struct linked_list* head, struct Node* target) {
 
-  struct Node* temp = head;
-  struct Node* prev = head;
+  struct Node* temp = head->first;
+  struct Node* previous = NULL;
 
-  if (head == delete) {
-
-    head = head->next;
-    free(temp);
-
-  } else {
-
-    //iterate over the nodes
-    while(temp->next != NULL) {
-
-      prev = temp;
-      temp = temp->next;
-
-      if (temp == delete) {
-
-        prev->next = temp->next;
-        free(temp);
-
-      }  
-
-    }
+  while(temp != target) {
+    previous = temp;
+    temp = temp->next;
   }
 
-
-
+  if(previous == NULL) {
+    head->first = temp->next;
+    head->count--;
+    free(temp);
+  } else {
+    previous->next = temp->next;
+    head->count--;
+    free(temp);
+  }
 
 }
-
 
 //vector manipulation functions
 static inline vec2f add_vec(vec2f v, vec2f d) {
@@ -100,7 +88,7 @@ vec2f random_start(int screen_width, vec2f dim) {
 
 void draw_ship(Piece ship) {
 
-  draw_rectangle(ship.position.x - ship.dimensions.x/2, ship.position.y, ship.dimensions.x, ship.dimensions.y, rgbToColour(255,0,0));
+  draw_rectangle(ship.position.x, ship.position.y, ship.dimensions.x, ship.dimensions.y, rgbToColour(255,0,0));
 
 }
 
@@ -118,7 +106,7 @@ bool test_collision(Piece a, Piece b) {
 
 void draw_enemy(Piece enemy) {
 
-  draw_rectangle(enemy.position.x - enemy.dimensions.x/2, enemy.position.y, enemy.dimensions.x, enemy.dimensions.y, rgbToColour(0,255,0));
+  draw_rectangle(enemy.position.x, enemy.position.y, enemy.dimensions.x, enemy.dimensions.y, rgbToColour(0,255,0));
 
 }
 
@@ -182,7 +170,7 @@ void app_main() {
     ship.dimensions = ship_dimensions;
     ship.position = (vec2f) {135/2+1-ship.dimensions.x/2, max_ship_pos.y};
 
-    struct enemies enemies;
+    struct linked_list enemies;
     enemies.count = 0;
     enemies.first = NULL;
    
@@ -238,14 +226,14 @@ void app_main() {
       //create enemies if enough time has passed
       if (last_enemy_time+4000000 < current_time) {
           //check there aren't too many on the board
-          if (enemies.count <= first_level_enemies + level && enemies.count <= max_enemies) {
+          if (enemies.count < first_level_enemies + level && enemies.count <= max_enemies) {
             
             struct Node* temp = NULL;
             temp = (struct Node*)malloc(sizeof(struct Node));
 
-            temp->enemy.position = random_start(135,enemy_dimesions);
-            temp->enemy.velocity = first_level_velocity;
-            temp->enemy.dimensions = enemy_dimesions;
+            temp->piece.position = random_start(135,enemy_dimesions);
+            temp->piece.velocity = first_level_velocity;
+            temp->piece.dimensions = enemy_dimesions;
             temp->next = NULL;
 
             if (enemies.count == 0) {
@@ -263,17 +251,40 @@ void app_main() {
       //test to ensure some actually exist before running.
       if (enemies.first != NULL){
         struct Node* temp = enemies.first;
-        while(temp->next != NULL) {
-
-          //move
-          temp->enemy.position = add_vec(temp->enemy.position, mul_vec_by_float(first_level_velocity,dt));
+        while(temp != NULL) {
+          //test if out of screen yet and if so delete from the ll
+          //this occurs here so that temp can become the next in the list before all the moves etc
+          temp->piece.position = add_vec(temp->piece.position, mul_vec_by_float(first_level_velocity,dt));
           
           //this has to be set as a result, otherwise it just swaps between states as it scans through each item in the LL
-          if (test_collision(temp->enemy,ship)) crashed = true;
-          draw_enemy(temp->enemy);
-          temp = temp->next;
+            if (test_collision(temp->piece,ship)) crashed = true;
+            draw_enemy(temp->piece);
+            temp = temp->next;
+
+          
 
         }
+      }
+
+      //clean up the pieces
+      //this is done seperately
+      if (enemies.first != NULL) {
+        struct Node* temp = enemies.first;
+        struct Node* to_delete = NULL;
+
+        while(temp != NULL) {
+
+          //advance the temp BEFORE deletion (otherwise you delete it then can't get ->next!)
+          to_delete = temp;
+          temp = temp->next;
+
+          if (to_delete->piece.position.y >= 240) {
+            delete_node(&enemies,to_delete);
+            score+=100;
+          }
+          
+        }
+
       }
 
 
@@ -281,7 +292,7 @@ void app_main() {
 
       //draw scoreboard
       draw_rectangle(0,0,240,16,rgbToColour(30,30,100));
-      if (crashed) gprintf("Crash!!");
+      gprintf("Score: %d",score);
       last_frame_time = current_time;
       flip_frame();
 
