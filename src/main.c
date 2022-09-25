@@ -3,6 +3,8 @@
 #include<graphics.h>
 #include<fonts.h>
 #include<driver/gpio.h>
+#include<stdio.h>
+#include<math.h>
 
 
 //Float vector (used for coordinates and velocities)
@@ -96,6 +98,27 @@ bool test_enemy(Piece enemy, float screen_height) {
     return (enemy.dimensions.y >= screen_height);  
   
 }
+
+void draw_circle(int radius, int center_x, int center_y, u_int16_t colour) {
+ 
+  int radius_sq = radius * radius, height;
+  //adapted from an answer I made for drawing the japanese flag in 159.102 to a .ppm
+  for (int i = 0; i <=radius; i++) {
+    height = sqrt(radius_sq - (i*i));
+    for (int j = 0;  j<=height; j++) {
+      draw_pixel(center_x + i, center_y+j,colour);
+      draw_pixel(center_x + i, center_y-j,colour);
+      draw_pixel(center_x - i, center_y+j,colour);
+      draw_pixel(center_x - i, center_y-j,colour);
+    }
+  }
+
+
+
+}
+
+
+
 //adapted from https://levelup.gitconnected.com/2d-collision-detection-8e50b6b8b5c0
 bool test_collision(Piece a, Piece b) {
   return a.position.x < b.position.x + b.dimensions.x //if a's left most position is less than b's right most
@@ -125,6 +148,8 @@ void app_main() {
   
   //game variables
   u_int16_t level;
+  char level_string[100]; //
+  char score_string[100]; //
   u_int32_t score;
   bool crashed;
 
@@ -139,7 +164,6 @@ void app_main() {
   float drag_decel = 100;
 
   vec2f enemy_dimesions = (vec2f) {6,20};
-  vec2f max_enemy_velocity = (vec2f) {5,10};
   int first_level_enemies = 5;
   int max_enemies = 20;
   vec2f first_level_velocity = (vec2f) {0,5};
@@ -153,26 +177,62 @@ void app_main() {
   // Game
   // =============================================
 
-  // infinite loop through the game menus 
+  // infinite loop through the game
   for(;;){
 
     crashed = false;
     level = 1;
     score = 0;
     //draws menu screen and awaits user press of either key
-    cls(rgbToColour(75,125,200));
-    setFont(FONT_UBUNTU16);
-    flip_frame();
-    while(gpio_get_level(0));
-    //delay start to allow for button release
+
+
+    while(gpio_get_level(0)){
+
+
+
+      cls(rgbToColour(142,0,0));
+
+
+
+      setFont(FONT_DEJAVU18);
+      setFontColour(255,255,0);
+      print_xy("BLOODSTREAM",CENTER,CENTER);
+      setFontColour(255,255,255);
+      setFont(FONT_SMALL);
+      print_xy("Use A to veer left",CENTER,LASTY+25);
+      print_xy("Use B to veer right",CENTER,LASTY+18);
+      setFont(FONT_UBUNTU16);
+      print_xy("PRESS A to BEGIN",CENTER,LASTY+20);
+      
+      
+
+      
+      setFontColour(0,0,0);
+      draw_circle(15,20,220,rgbToColour(255,255,255));
+      draw_circle(15,115,220,rgbToColour(255,255,255));
+      print_xy("A",15,212);
+      print_xy("B",111,212);
+
+
+      
+      
+      
+      flip_frame();
+
+    }
+
+    //delay start to allow for button release (otherwise the ship just skites off to screen left!)
     while(esp_timer_get_time() < last_frame_time+500000);
+
+
+
     // create ships
 
     Piece ship;
     ship.velocity = (vec2f) {0,0};
     ship.dimensions = ship_dimensions;
     ship.position = (vec2f) {135/2+1-ship.dimensions.x/2, max_ship_pos.y};
-
+    setFontColour(255,255,255);
     struct linked_list enemies;
     enemies.count = 0;
     enemies.first = NULL;
@@ -297,8 +357,10 @@ void app_main() {
 
       }
 
-      //increment level if required
-      if (last_level_time+30000000 < current_time ) {
+      //increment level every 10 seconds, this is too short for a real game, but for demo purposes of the speed changing etc
+      //works quite well
+
+      if (last_level_time+10000000 < current_time) {
 
         level += 1;
         last_level_time = current_time;
@@ -307,16 +369,17 @@ void app_main() {
 
       //draw scoreboard
       draw_rectangle(0,0,240,16,rgbToColour(30,30,100));
-      gprintf("Level: %d Score: %d",level,score);
-      last_frame_time = current_time;
-      flip_frame();
+      gprintf("Score: %d",score);
 
       //display level change
       if (last_level_time + 1000000 > current_time && level > 1) {
         draw_rectangle(0,105,240,30,rgbToColour(255,0,0));
-        print_xy("LEVEL UP",CENTER,CENTER);
+        snprintf(level_string,sizeof(level_string),"LEVEL %d",level);
+        print_xy(level_string,CENTER,CENTER);
       }
 
+      last_frame_time = current_time;
+      flip_frame();
 
 
     }
@@ -326,8 +389,20 @@ void app_main() {
     //==========================
 
     cls(rgbToColour(255,0,0));
+    setFont(FONT_DEJAVU24);
+    print_xy("GAME",CENTER,20);
+    print_xy("OVER",CENTER,LASTY+25);
+    setFont(FONT_UBUNTU16);
+    snprintf(score_string,sizeof(score_string),"Your score: %d", score);
+    print_xy(score_string,CENTER,LASTY+30);
+    
+    print_xy("Press A",CENTER,LASTY+30);
+
     flip_frame();
-    while(esp_timer_get_time() < last_frame_time + 2000000);
+    while(gpio_get_level(0));
+    //delay to stop it immediately starting a new game
+    last_enemy_time = esp_timer_get_time();
+    while(esp_timer_get_time() < last_frame_time+1000000);
 
 
   }
