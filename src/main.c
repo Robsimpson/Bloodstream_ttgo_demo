@@ -20,6 +20,7 @@ typedef struct Piece {
   vec2f position;
   vec2f velocity;
   vec2f accel;
+  bool flag;
 
 } Piece;
 
@@ -61,6 +62,25 @@ void delete_node(struct linked_list* head, struct Node* target) {
     head->count--;
     free(temp);
   }
+
+}
+
+void clear_list(struct linked_list *head) {
+
+  struct Node* temp = head->first;
+  struct Node* previous = NULL;
+
+  while (temp != NULL) {
+
+    previous = temp;
+    temp = temp->next;
+    free(previous);
+
+  }
+
+  head->first = NULL;
+  head->count = 0;
+
 
 }
 
@@ -117,8 +137,6 @@ void draw_circle(int radius, int center_x, int center_y, u_int16_t colour) {
 
 }
 
-
-
 //adapted from https://levelup.gitconnected.com/2d-collision-detection-8e50b6b8b5c0
 bool test_collision(Piece a, Piece b) {
   return a.position.x < b.position.x + b.dimensions.x //if a's left most position is less than b's right most
@@ -153,8 +171,8 @@ void app_main() {
   u_int32_t score;
   bool crashed;
 
-  // game piece configurations, should be able to be modified in menu
-  // position is always the top left corner of the hit box! 
+  // game piece configurations, variables to allow tuning and eventual expansion by adding menus
+  // position is always the top left corner of the hit box
   vec2f ship_dimensions = (vec2f) {20,40};
   vec2f min_ship_pos = (vec2f) {0, 0};
   vec2f max_ship_pos = (vec2f) {135 - ship_dimensions.x, 240 - ship_dimensions.y};
@@ -180,19 +198,75 @@ void app_main() {
   // infinite loop through the game
   for(;;){
 
-    crashed = false;
-    level = 1;
-    score = 0;
-    //draws menu screen and awaits user press of either key
+  crashed = false;
+  level = 1;
+  score = 0;
+  linked_list bubbles;
+  bubbles.count = 0;
+  last_enemy_time = esp_timer_get_time();
 
-
+  //draws menu screen and awaits user press of the A key
+  
     while(gpio_get_level(0)){
 
+      current_time = esp_timer_get_time();
+      
+      cls(rgbToColour(100,0,0));
+
+      //animate the bubbles
+      if (last_enemy_time + 500000 < current_time) {
+
+        struct Node* temp = NULL;
+        temp = (struct Node*)malloc(sizeof(struct Node));
+
+        temp->piece.position = random_start(135,(vec2f) {20,20});
+        temp->piece.velocity = (vec2f) {0,20};
+        temp->piece.dimensions = (vec2f) {rand()%10+5,0};
+        temp->next = NULL;
+
+        if (bubbles.count == 0) {
+            bubbles.first = temp;
+          } else {
+            add_node(bubbles.first,temp);
+          }
+        last_enemy_time = current_time;
+        bubbles.count += 1;
+      }
+
+      // //iterate over the linked list of bubbles moving them, then drawing them
+      //test to ensure some actually exist before running.
+      if (bubbles.first != NULL){
+        struct Node* temp = bubbles.first;
+        while(temp != NULL) {
+          dt = (esp_timer_get_time() - last_frame_time)/1.0e6f;
+
+          temp->piece.position = add_vec(temp->piece.position, mul_vec_by_float(temp->piece.velocity,dt));
+      
+          draw_circle(temp->piece.dimensions.x,temp->piece.position.x,temp->piece.position.y,rgbToColour(120,0,0));
+          draw_circle(temp->piece.dimensions.x-2,temp->piece.position.x,temp->piece.position.y,rgbToColour(135,0,0));
+          temp = temp->next;
 
 
-      cls(rgbToColour(142,0,0));
+        }
+      }
 
+      //clean up the pieces that have exited the board
+      if (bubbles.first != NULL) {
+        struct Node* temp = bubbles.first;
+        struct Node* to_delete = NULL;
 
+        while(temp != NULL) {
+
+          //advance the temp BEFORE deletion (otherwise you delete it then can't get ->next!)
+          to_delete = temp;
+          temp = temp->next;
+
+          if (to_delete->piece.position.y >= 240) {
+            delete_node(&bubbles,to_delete);
+          }
+          
+        }
+      }
 
       setFont(FONT_DEJAVU18);
       setFontColour(255,255,0);
@@ -205,27 +279,41 @@ void app_main() {
       print_xy("PRESS A to BEGIN",CENTER,LASTY+20);
       
       
-
-      
       setFontColour(0,0,0);
       draw_circle(15,20,220,rgbToColour(255,255,255));
       draw_circle(15,115,220,rgbToColour(255,255,255));
       print_xy("A",15,212);
       print_xy("B",111,212);
 
-
-      
-      
       
       flip_frame();
-
+      last_frame_time = current_time;
     }
 
+
     //delay start to allow for button release (otherwise the ship just skites off to screen left!)
+    clear_list(&bubbles);
     while(esp_timer_get_time() < last_frame_time+500000);
 
+    //create first bubbles in procedural scenery
 
+    struct Node* temp = NULL;
+    temp = (struct Node*)malloc(sizeof(struct Node));
 
+    temp->piece.position = (vec2f) {0,-10};
+    temp->piece.dimensions = (vec2f) {rand()%10+5,0};
+    temp->piece.flag = true;
+    temp->next = NULL;
+    bubbles.first = temp;
+    
+    temp = (struct Node*)malloc(sizeof(struct Node));
+    temp->piece.position = (vec2f) {135,-10};
+    temp->piece.dimensions = (vec2f) {rand()%10+5,0};
+    temp->piece.flag = true;
+    temp->next = NULL;
+
+    add_node(bubbles.first,temp);
+    
     // create ships
 
     Piece ship;
@@ -241,12 +329,61 @@ void app_main() {
     last_level_time = last_frame_time;
     last_enemy_time = last_frame_time;
 
+    //set the seed each game so the random generation changes 
     srand(last_frame_time);
+
     // operating game loop continues endlessly until lose condition
     while(!crashed) {
+      
+      cls(rgbToColour(35,0,0));
+      
+      current_time = esp_timer_get_time();
+      dt = (esp_timer_get_time() - last_frame_time)/1.0e6f; //converted to seconds
 
-      cls(0);
+      temp = bubbles.first;
+      while(temp != NULL) {
+      //add bubbles if needed, only if the flag is TRUE otherwise it infinitely creates circles and crashes!
+        if(temp->piece.position.y >= 0 && temp->piece.flag) {
+          temp->piece.flag = false; //the bubble can only pass Y=0 once!
+          struct Node* new = (struct Node*)malloc(sizeof(struct Node));
+          float x_start = 0;
+          if (temp->piece.position.x > 75) x_start = 135; 
+          new->piece.position = (vec2f) {x_start,-10};
+          new->piece.dimensions = (vec2f) {rand()%10+5,0};
+          new->piece.flag = true;
+          new->next = NULL;
 
+          add_node(bubbles.first,new);
+
+        }
+        temp = temp->next;
+      }
+
+      temp = bubbles.first;
+      while (temp != NULL) {
+        //move bubbles
+        temp->piece.velocity = add_vec(first_level_velocity,(vec2f){0,5*level});
+        temp->piece.position = add_vec(temp->piece.position, mul_vec_by_float(temp->piece.velocity,dt));
+        //draw bubbles
+        draw_circle(temp->piece.dimensions.x,temp->piece.position.x,temp->piece.position.y,rgbToColour(50,0,0));
+        draw_circle(temp->piece.dimensions.x-2,temp->piece.position.x,temp->piece.position.y,rgbToColour(60,0,0));
+        draw_circle(temp->piece.dimensions.x-4,temp->piece.position.x,temp->piece.position.y,rgbToColour(100,0,0));
+
+        temp = temp->next;
+      }
+
+      //delete and clean up if required
+      temp = bubbles.first;
+      while(temp != NULL) {
+        struct Node* to_delete = NULL;
+        to_delete = temp;
+        temp = temp->next;
+        //remove bubbles if needed
+        if (to_delete->piece.position.y>240+to_delete->piece.dimensions.x) {
+          delete_node(&bubbles,to_delete);
+        }
+      }
+    
       //accelerate the ship based on the status of the buttons
       //left thrusts left, right right and both together thrusts forwards
       if(!gpio_get_level(0) && !gpio_get_level(35)) {
@@ -277,8 +414,8 @@ void app_main() {
 
       //move the ship - accelerates, checks against terminal velocities, then moves and tests if within boundaries.
       //acceleration is velocity + accel * delta time
-      current_time = esp_timer_get_time();
-      dt = (esp_timer_get_time() - last_frame_time)/1.0e6f; //converted to seconds
+
+
       ship.velocity = add_vec(ship.velocity,mul_vec_by_float(ship.accel,dt));
       //test that the ship is not going faster than it's max velocity
       ship.velocity = min_vector(ship.velocity,max_velocity);
@@ -388,20 +525,91 @@ void app_main() {
     //Game Over Screen
     //==========================
 
-    cls(rgbToColour(255,0,0));
+
+  clear_list(&enemies);
+  clear_list(&bubbles);
+
+  while(gpio_get_level(0)){
+
+
+    current_time = esp_timer_get_time();
+      
+      cls(rgbToColour(100,0,0));
+
+      //animate the bubbles
+      if (last_enemy_time + 500000 < current_time) {
+
+        struct Node* temp = NULL;
+        temp = (struct Node*)malloc(sizeof(struct Node));
+
+        temp->piece.position = random_start(135,(vec2f) {20,20});
+        temp->piece.velocity = (vec2f) {0,20};
+        temp->piece.dimensions = (vec2f) {rand()%10+5,0};
+        temp->next = NULL;
+
+        if (bubbles.count == 0) {
+            bubbles.first = temp;
+          } else {
+            add_node(bubbles.first,temp);
+          }
+        last_enemy_time = current_time;
+        bubbles.count += 1;
+      }
+
+      // //iterate over the linked list of bubbles moving them, then drawing them
+      //test to ensure some actually exist before running.
+      if (bubbles.first != NULL){
+        struct Node* temp = bubbles.first;
+        while(temp != NULL) {
+          dt = (esp_timer_get_time() - last_frame_time)/1.0e6f;
+
+          temp->piece.position = add_vec(temp->piece.position, mul_vec_by_float(temp->piece.velocity,dt));
+      
+          draw_circle(temp->piece.dimensions.x,temp->piece.position.x,temp->piece.position.y,rgbToColour(120,0,0));
+          draw_circle(temp->piece.dimensions.x-2,temp->piece.position.x,temp->piece.position.y,rgbToColour(135,0,0));
+          temp = temp->next;
+
+
+        }
+      }
+
+      //clean up the pieces that have exited the board
+      if (bubbles.first != NULL) {
+        struct Node* temp = bubbles.first;
+        struct Node* to_delete = NULL;
+
+        while(temp != NULL) {
+
+          //advance the temp BEFORE deletion (otherwise you delete it then can't get ->next!)
+          to_delete = temp;
+          temp = temp->next;
+
+          if (to_delete->piece.position.y >= 240) {
+            delete_node(&bubbles,to_delete);
+          }
+          
+        }
+      }
+
+
     setFont(FONT_DEJAVU24);
     print_xy("GAME",CENTER,20);
     print_xy("OVER",CENTER,LASTY+25);
     setFont(FONT_UBUNTU16);
+    
     snprintf(score_string,sizeof(score_string),"Your score: %d", score);
+
+
+
     print_xy(score_string,CENTER,LASTY+30);
     
     print_xy("Press A",CENTER,LASTY+30);
-
+    last_frame_time = current_time;
     flip_frame();
-    while(gpio_get_level(0));
+   
+  }
     //delay to stop it immediately starting a new game
-    last_enemy_time = esp_timer_get_time();
+    last_frame_time = esp_timer_get_time();
     while(esp_timer_get_time() < last_frame_time+1000000);
 
 
