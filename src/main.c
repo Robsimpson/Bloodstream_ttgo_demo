@@ -149,12 +149,6 @@ vec2f random_start(int screen_width, vec2f dim) {
   return (vec2f) {rand() % (int) screen_width+1-dim.x,0-dim.y};
 }
 
-void draw_ship(Piece ship) {
-
-  draw_rectangle(ship.position.x, ship.position.y, ship.dimensions.x, ship.dimensions.y, rgbToColour(255,0,0));
-
-}
-
 void draw_circle(int radius, int center_x, int center_y, u_int16_t colour) {
  
   int radius_sq = radius * radius, height;
@@ -175,6 +169,25 @@ void draw_circle(int radius, int center_x, int center_y, u_int16_t colour) {
 void draw_enemy(Piece enemy) {
 
   draw_rectangle(enemy.position.x, enemy.position.y, enemy.dimensions.x, enemy.dimensions.y, rgbToColour(0,255,0));
+
+}
+
+void draw_ship(Piece ship) {
+
+  //white side stripes
+  draw_rectangle(ship.position.x, ship.position.y, 1, ship.dimensions.y, rgbToColour(150,200,200));
+  draw_rectangle(ship.position.x + ship.dimensions.x-1, ship.position.y, 1, ship.dimensions.y, rgbToColour(150,200,200));
+
+  //next stripes
+  draw_rectangle(ship.position.x+1, ship.position.y, 2, ship.dimensions.y, rgbToColour(0,255,185));
+  draw_rectangle(ship.position.x + ship.dimensions.x-3, ship.position.y, 2, ship.dimensions.y, rgbToColour(0,255,185));
+
+  //next stripes
+  draw_rectangle(ship.position.x+3, ship.position.y, 2, ship.dimensions.y, rgbToColour(72,103,103));
+  draw_rectangle(ship.position.x + ship.dimensions.x-5, ship.position.y, 2, ship.dimensions.y, rgbToColour(72,103,103));
+
+  //middle block 
+  draw_rectangle(ship.position.x+5, ship.position.y+25, 10, ship.dimensions.y-25, rgbToColour(72,95,95));
 
 }
 
@@ -250,10 +263,10 @@ Timer variables
   float thrust_accel = 200; //pixels per second per second
   float drag_decel = 100;
 
-  vec2f enemy_dimesions = (vec2f) {6,20};
+  vec2f enemy_dimesions = (vec2f) {6,16};
   int first_level_enemies = 5;
   int max_enemies = 20;
-  vec2f first_level_velocity = (vec2f) {0,5};
+  vec2f first_level_velocity = (vec2f) {0,10};
 
   // timer variables
   u_int64_t current_time, last_level_time, last_enemy_time ,last_frame_time = esp_timer_get_time();
@@ -370,8 +383,7 @@ Game
   }
 
   //delay start to allow for button release (otherwise the ship just skites off to screen left!)
-  // clear_list(&bubbles);
-  while(esp_timer_get_time() < last_frame_time+500000);
+   while(esp_timer_get_time() < last_frame_time+500000);
 
 
   /* 
@@ -421,7 +433,6 @@ variables
   
   last_frame_time = esp_timer_get_time();
   last_level_time = last_frame_time;
-  last_enemy_time = last_frame_time;
 
     //set the seed each game so the random generation changes 
   srand(last_frame_time);
@@ -438,7 +449,6 @@ moved off the game board
 
 ====================================================
 */
-
   while(!crashed) {
       
       cls(rgbToColour(35,0,0));
@@ -446,6 +456,8 @@ moved off the game board
       current_time = esp_timer_get_time();
       dt = (esp_timer_get_time() - last_frame_time)/1.0e6f; //converted to seconds
 
+
+      //Sidewall animation starts here
       struct Node* temp = sidewalls.first;
       while(temp != NULL) {
       //add circles if needed, only if the flag is TRUE otherwise it infinitely creates circles and crashes!
@@ -627,10 +639,15 @@ moved off the game board
 
     }
 
-    //==========================
-    //Game Over Screen
-    //==========================
-
+/* 
+====================================================
+Game Over
+----------------------------------------------------
+Clears enemies LL, and restarts the bubble background
+awaits user input showing them game over, and their 
+score
+====================================================
+*/
   //delete any enemies remaining in the linked list
   clear_list(&enemies);
  // clear_list(&bubbles);
