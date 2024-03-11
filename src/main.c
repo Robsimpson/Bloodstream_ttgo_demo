@@ -189,6 +189,9 @@ void draw_ship(Piece ship) {
   //middle block 
   draw_rectangle(ship.position.x+5, ship.position.y+25, 10, ship.dimensions.y-25, rgbToColour(72,95,95));
 
+
+
+
 }
 
 
