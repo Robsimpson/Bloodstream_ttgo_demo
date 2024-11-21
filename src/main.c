@@ -3,6 +3,7 @@
 #include<graphics.h>
 #include<fonts.h>
 #include<driver/gpio.h>
+#include<inttypes.h>
 #include<stdio.h>
 #include<math.h>
 
@@ -149,7 +150,7 @@ vec2f random_start(int screen_width, vec2f dim) {
   return (vec2f) {rand() % (int) screen_width+1-dim.x,0-dim.y};
 }
 
-void draw_circle(int radius, int center_x, int center_y, u_int16_t colour) {
+void draw_circle(int radius, int center_x, int center_y, uint16_t colour) {
  
   int radius_sq = radius * radius, height;
   //adapted from an answer I made for drawing the japanese flag in 159.102 to a .ppm
@@ -250,10 +251,10 @@ Timer variables
   set_orientation(PORTRAIT);
   
   //game variables
-  u_int16_t level;
+  uint16_t level;
   char level_string[100]; //
   char score_string[100]; //
-  u_int32_t score;
+  uint32_t score;
   bool crashed;
 
   // game piece configurations, variables to allow tuning and eventual expansion by adding menus
@@ -272,8 +273,9 @@ Timer variables
   vec2f first_level_velocity = (vec2f) {0,10};
 
   // timer variables
-  u_int64_t current_time, last_level_time, last_enemy_time ,last_frame_time = esp_timer_get_time();
+  uint64_t current_time, last_level_time, last_enemy_time ,last_frame_time = esp_timer_get_time();
   float dt; //declare as float for the vector calcs.
+
 
 
   //procedural backgrounds
@@ -723,7 +725,7 @@ score
     print_xy("OVER",CENTER,LASTY+25);
     setFont(FONT_UBUNTU16);
     
-    snprintf(score_string,sizeof(score_string),"Your score: %d", score);
+    snprintf(score_string,sizeof(score_string),"Your score: %" PRIu32, score);
 
 
 
